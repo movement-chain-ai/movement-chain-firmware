@@ -1,0 +1,25 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🔍 Running pre-commit checks for firmware..."
+
+# Check for common C++ mistakes
+echo "Checking for common issues..."
+if grep -rn "Serial.print\|printf\|cout" src/ 2>/dev/null; then
+  echo "⚠️  Warning: Debug print statements found (non-blocking)"
+fi
+
+# Check for TODO comments
+if grep -rn "TODO\|FIXME" src/ lib/ 2>/dev/null | head -5; then
+  echo "⚠️  Warning: TODO/FIXME comments found (non-blocking)"
+fi
+
+# Format C++ code if clang-format is installed
+if command -v clang-format > /dev/null; then
+  echo "Formatting C++ files..."
+  find src/ lib/ -name "*.cpp" -o -name "*.h" -o -name "*.ino" 2>/dev/null | xargs clang-format -i --style=Google || true
+else
+  echo "⚠️  clang-format not installed, skipping formatting"
+fi
+
+echo "✅ Pre-commit checks completed"

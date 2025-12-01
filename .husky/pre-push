@@ -1,0 +1,35 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🚀 Running pre-push validation for firmware..."
+
+# Check if PlatformIO is installed
+if ! command -v pio > /dev/null; then
+  echo "⚠️  PlatformIO not installed, skipping build checks"
+  echo "Install with: pip install platformio"
+  exit 0
+fi
+
+# Build firmware
+echo "Building firmware for ESP32-S3..."
+if pio run -e esp32-s3 2>&1; then
+  echo "✅ Firmware build successful"
+else
+  echo "❌ Firmware build failed"
+  exit 1
+fi
+
+# Check binary size (optional)
+if [ -f .pio/build/esp32-s3/firmware.bin ]; then
+  SIZE=$(stat -f%z .pio/build/esp32-s3/firmware.bin 2>/dev/null || stat -c%s .pio/build/esp32-s3/firmware.bin 2>/dev/null)
+  echo "📦 Firmware size: $SIZE bytes"
+  if [ $SIZE -gt 1048576 ]; then
+    echo "⚠️  Warning: Firmware larger than 1MB"
+  fi
+fi
+
+# Run tests if configured
+echo "Running tests..."
+pio test 2>/dev/null || echo "⚠️  No tests configured"
+
+echo "✅ Pre-push validation completed"

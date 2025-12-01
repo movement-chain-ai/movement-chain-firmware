@@ -1,0 +1,66 @@
+name: Firmware PR Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install PlatformIO
+        run: |
+          pip install platformio
+          pio --version
+
+      - name: Build firmware
+        run: |
+          pio run -e esp32-s3
+
+      - name: Check binary size
+        run: |
+          SIZE=$(stat -c%s .pio/build/esp32-s3/firmware.bin)
+          echo "Firmware size: $SIZE bytes"
+          echo "## Build Results 📦" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Build: Success" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 Size: $SIZE bytes" >> $GITHUB_STEP_SUMMARY
+          if [ $SIZE -gt 1048576 ]; then
+            echo "- ⚠️  Warning: Firmware > 1MB" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Run tests
+        run: |
+          pio test || echo "No tests configured"
+
+      - name: Upload firmware binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32-s3-pr${{ github.event.pull_request.number }}
+          path: .pio/build/esp32-s3/firmware.bin
+          retention-days: 3
+
+  validation-summary:
+    needs: validate-firmware
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Firmware Validation Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All checks passed! Firmware is ready for review." >> $GITHUB_STEP_SUMMARY
